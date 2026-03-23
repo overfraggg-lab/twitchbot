@@ -1,17 +1,12 @@
 /**
  * OVERFRAG Twitch Bot — Command handlers
+ * All commands use global match data from the OVERFRAG API.
  */
-import { config } from './config.js';
 import * as api from './api.js';
 
 // ============================================
 // HELPERS
 // ============================================
-function getTeamIdForChannel(channel) {
-  const ch = channel.replace('#', '').toLowerCase();
-  return config.channelTeamMap[ch] || null;
-}
-
 function formatScore(m) {
   const t1 = m.equipa1_sigla || m.equipa1_nome || '?';
   const t2 = m.equipa2_sigla || m.equipa2_nome || '?';
@@ -33,14 +28,7 @@ function formatTime(m) {
 
 /** !score — Live score */
 export async function score(channel, args) {
-  const teamId = getTeamIdForChannel(channel);
-  
-  let matches;
-  if (teamId) {
-    matches = await api.getTeamMatches(teamId);
-  } else {
-    matches = await api.getUpcomingMatches();
-  }
+  const matches = await api.getUpcomingMatches();
 
   const live = matches.find(m => m.estado === 'ao_vivo' || m.estado === 'em_curso');
   if (!live) return '❌ Nenhum jogo ao vivo de momento.';
@@ -58,14 +46,7 @@ export async function score(channel, args) {
 
 /** !mapas — Maps of current/last match */
 export async function mapas(channel, args) {
-  const teamId = getTeamIdForChannel(channel);
-  
-  let matches;
-  if (teamId) {
-    matches = await api.getTeamMatches(teamId);
-  } else {
-    matches = await api.getUpcomingMatches();
-  }
+  const matches = await api.getUpcomingMatches();
 
   // Find live or most recent finished
   const live = matches.find(m => m.estado === 'ao_vivo' || m.estado === 'em_curso');
@@ -101,14 +82,7 @@ export async function mapas(channel, args) {
 
 /** !match — Current match details */
 export async function match(channel, args) {
-  const teamId = getTeamIdForChannel(channel);
-  
-  let matches;
-  if (teamId) {
-    matches = await api.getTeamMatches(teamId);
-  } else {
-    matches = await api.getUpcomingMatches();
-  }
+  const matches = await api.getUpcomingMatches();
 
   const live = matches.find(m => m.estado === 'ao_vivo' || m.estado === 'em_curso');
   const upcoming = matches.find(m => m.estado === 'agendado');
@@ -128,14 +102,7 @@ export async function match(channel, args) {
 
 /** !next — Next scheduled match */
 export async function next(channel, args) {
-  const teamId = getTeamIdForChannel(channel);
-  
-  let matches;
-  if (teamId) {
-    matches = await api.getTeamMatches(teamId);
-  } else {
-    matches = await api.getUpcomingMatches();
-  }
+  const matches = await api.getUpcomingMatches();
 
   const upcoming = matches.find(m => m.estado === 'agendado');
   if (!upcoming) return '❌ Nenhum jogo agendado de momento.';
@@ -150,18 +117,6 @@ export async function vrs(channel, args) {
   const search = args.join(' ').trim();
   
   if (!search) {
-    // Show channel team VRS or top 5
-    const teamId = getTeamIdForChannel(channel);
-    if (teamId) {
-      try {
-        const team = await api.getTeam(String(teamId));
-        if (team.vrs_rank) {
-          return `🏆 ${team.nome} — VRS #${team.vrs_rank} (${team.vrs_points || 0} pts)`;
-        }
-        return `ℹ️ ${team.nome} não tem ranking VRS.`;
-      } catch { /* fall through */ }
-    }
-    
     // Show top 5 from ranking
     const ranking = await api.getRanking();
     const withVrs = ranking.filter(t => t.vrs_rank).sort((a, b) => a.vrs_rank - b.vrs_rank).slice(0, 5);

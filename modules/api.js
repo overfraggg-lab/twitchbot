@@ -46,3 +46,9 @@ export async function getRanking() {
   const data = await apiFetch('/backend/equipas/ranking');
   return data.items || [];
 }
+
+/** Get all registered streamers */
+export async function getStreamers() {
+  const data = await apiFetch('/backend/streamers');
+  return data.items || [];
+}

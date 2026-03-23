@@ -1,12 +1,14 @@
 /**
  * OVERFRAG Twitch Bot — Entry point
  * 
- * Connects to Twitch IRC via tmi.js, registers commands,
- * and polls OVERFRAG API for CS2 match data.
+ * Connects to Twitch IRC via tmi.js.
+ * Auto-fetches streamer channels from the OVERFRAG site API.
+ * Periodically refreshes the channel list to join/part as needed.
  */
 import tmi from 'tmi.js';
 import { config } from './modules/config.js';
 import * as commands from './modules/commands.js';
+import * as api from './modules/api.js';
 
 // ============================================
 // VALIDATION
@@ -16,13 +18,8 @@ if (!config.twitch.token) {
   process.exit(1);
 }
 
-if (config.twitch.channels.length === 0) {
-  console.error('❌ TWITCH_CHANNELS não definido! Adicionar canais no .env.');
-  process.exit(1);
-}
-
 // ============================================
-// TMI CLIENT
+// TMI CLIENT — starts with no channels; joins dynamically
 // ============================================
 const client = new tmi.Client({
   options: { debug: false },
@@ -30,8 +27,59 @@ const client = new tmi.Client({
     username: config.twitch.username,
     password: config.twitch.token,
   },
-  channels: config.twitch.channels,
+  channels: [], // Will be populated from site API
 });
+
+// Track currently joined channels
+const joinedChannels = new Set();
+
+// ============================================
+// FETCH STREAMERS FROM SITE + JOIN CHANNELS
+// ============================================
+async function refreshChannels() {
+  try {
+    const streamers = await api.getStreamers();
+    const twitchNames = streamers
+      .map(s => (s.twitch_name || '').toLowerCase().trim())
+      .filter(Boolean);
+
+    if (twitchNames.length === 0) {
+      console.log('⚠️ Nenhum streamer com twitch_name encontrado no site.');
+      return;
+    }
+
+    // Join new channels
+    for (const name of twitchNames) {
+      if (!joinedChannels.has(name)) {
+        try {
+          await client.join(name);
+          joinedChannels.add(name);
+          console.log(`📺 Joined #${name}`);
+        } catch (e) {
+          console.error(`❌ Falha ao entrar em #${name}:`, e.message);
+        }
+      }
+    }
+
+    // Part channels that are no longer in the site
+    const siteSet = new Set(twitchNames);
+    for (const name of joinedChannels) {
+      if (!siteSet.has(name)) {
+        try {
+          await client.part(name);
+          joinedChannels.delete(name);
+          console.log(`📤 Left #${name} (removido do site)`);
+        } catch (e) {
+          // Ignore part errors
+        }
+      }
+    }
+
+    console.log(`📺 Canais ativos: ${joinedChannels.size} (${[...joinedChannels].join(', ')})`);
+  } catch (err) {
+    console.error('❌ Erro ao buscar streamers:', err.message);
+  }
+}
 
 // ============================================
 // COMMAND REGISTRY
@@ -81,15 +129,17 @@ client.on('message', async (channel, tags, message, self) => {
 });
 
 // ============================================
-// CONNECT
+// CONNECT + CHANNEL REFRESH LOOP
 // ============================================
-client.on('connected', (addr, port) => {
+client.on('connected', async (addr, port) => {
   console.log(`✅ OVERFRAG Twitch Bot conectado a ${addr}:${port}`);
-  console.log(`📺 Canais: ${config.twitch.channels.join(', ')}`);
   console.log(`🔗 API: ${config.api.baseUrl}`);
-  if (Object.keys(config.channelTeamMap).length > 0) {
-    console.log(`🗺️ Channel→Team map: ${JSON.stringify(config.channelTeamMap)}`);
-  }
+
+  // Initial channel join
+  await refreshChannels();
+
+  // Refresh channels periodically
+  setInterval(refreshChannels, config.refreshInterval);
 });
 
 client.on('disconnected', (reason) => {
