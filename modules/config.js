@@ -3,10 +3,17 @@
  */
 import 'dotenv/config';
 
+// Normalize OAuth token — ensure it has the "oauth:" prefix
+function normalizeToken(raw) {
+  if (!raw) return '';
+  const t = raw.trim();
+  return t.startsWith('oauth:') ? t : `oauth:${t}`;
+}
+
 export const config = {
   twitch: {
-    username: process.env.TWITCH_BOT_USERNAME || 'overfragbot',
-    token: process.env.TWITCH_OAUTH_TOKEN || '',
+    username: (process.env.TWITCH_BOT_USERNAME || 'overfragbot').toLowerCase().trim(),
+    token: normalizeToken(process.env.TWITCH_OAUTH_TOKEN),
     clientId: process.env.TWITCH_CLIENT_ID || '',
     clientSecret: process.env.TWITCH_CLIENT_SECRET || '',
   },

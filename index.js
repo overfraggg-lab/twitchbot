@@ -17,12 +17,24 @@ if (!config.twitch.token) {
   console.error('❌ TWITCH_OAUTH_TOKEN não definido! Criar .env com o token.');
   process.exit(1);
 }
+if (!config.twitch.clientId) {
+  console.warn('⚠️ TWITCH_CLIENT_ID não definido — a conexão pode falhar com Twitch IRC moderno.');
+}
+
+console.log(`🔧 Config: username=${config.twitch.username}, clientId=${config.twitch.clientId ? config.twitch.clientId.slice(0, 6) + '...' : '(vazio)'}, token=${config.twitch.token ? config.twitch.token.slice(0, 12) + '...' : '(vazio)'}`);
 
 // ============================================
 // TMI CLIENT — starts with no channels; joins dynamically
 // ============================================
 const client = new tmi.Client({
-  options: { debug: false },
+  options: {
+    debug: false,
+    clientId: config.twitch.clientId || undefined,
+  },
+  connection: {
+    reconnect: true,
+    secure: true,
+  },
   identity: {
     username: config.twitch.username,
     password: config.twitch.token,
@@ -144,10 +156,19 @@ client.on('connected', async (addr, port) => {
 
 client.on('disconnected', (reason) => {
   console.log(`❌ Desconectado: ${reason}`);
+  if (reason?.includes('Login authentication failed')) {
+    console.error('🔑 O token OAuth é inválido ou expirou. Gera um novo token em:');
+    console.error(`   https://id.twitch.tv/oauth2/authorize?client_id=${config.twitch.clientId}&redirect_uri=https://overfrag.pt/&response_type=token&scope=chat:read+chat:edit`);
+    console.error('   Depois copia o access_token do URL e coloca em TWITCH_OAUTH_TOKEN (com ou sem prefixo oauth:)');
+  }
 });
 
 client.connect().catch(err => {
-  console.error('❌ Falha ao conectar:', err.message);
+  console.error('❌ Falha ao conectar:', err.message || err);
+  if (String(err).includes('Login authentication failed')) {
+    console.error('🔑 Token inválido/expirado. Gera um novo:');
+    console.error(`   https://id.twitch.tv/oauth2/authorize?client_id=${config.twitch.clientId}&redirect_uri=https://overfrag.pt/&response_type=token&scope=chat:read+chat:edit`);
+  }
   process.exit(1);
 });
 
