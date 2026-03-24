@@ -3,7 +3,7 @@
  * 
  * Connects to Twitch IRC via tmi.js.
  * Nightbot model: only joins channels that added the bot via the dashboard.
- * Only responds to commands in channels where the bot has MOD status.
+ * Commands filter by the streamer's claimed games.
  * Supports custom commands and timers from the dashboard.
  */
 import tmi from 'tmi.js';
@@ -201,12 +201,6 @@ client.on('message', async (channel, tags, message, self) => {
 
   if (self) return;
 
-  // Detect if bot is mod from userstate (on own messages) — handled in 'notice' event
-  // For incoming messages, just process commands
-
-  // Must be mod to respond
-  if (!modChannels.has(channelName)) return;
-
   // Get channel config
   const chConfig = channelConfigs.get(channelName);
   const prefix = chConfig?.prefix || config.prefix;
@@ -249,7 +243,9 @@ client.on('message', async (channel, tags, message, self) => {
   if (!meetsCooldown(`${channelName}:${cmd}`, (chConfig?.cooldown_seconds || 5) * 1000)) return;
 
   try {
-    const response = await handler(channel, args);
+    // Pass streamer's user_id so commands can filter by claimed games
+    const streamerUserId = chConfig?.streamer_user_id || null;
+    const response = await handler(channel, args, { streamerUserId });
     if (response) await client.say(channel, response);
   } catch (err) {
     console.error(`[${cmd}] Erro:`, err?.message || err);
