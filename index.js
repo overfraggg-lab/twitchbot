@@ -2,7 +2,7 @@
  * OVERFRAG Twitch Bot — Entry point
  * 
  * Connects to Twitch IRC via tmi.js.
- * Auto-fetches streamer channels from the OVERFRAG site API.
+ * Nightbot model: only joins channels that added the bot via the dashboard.
  * Only responds to commands in channels where the bot has MOD status.
  * Supports custom commands and timers from the dashboard.
  */
@@ -68,16 +68,21 @@ const BUILTIN_COMMANDS = {
 const cooldowns = new Map();
 
 // ============================================
-// FETCH CHANNEL CONFIGS FROM SITE API
+// FETCH CONFIGS + JOIN/PART CHANNELS (Nightbot model)
+// Only joins channels that were added via the dashboard.
 // ============================================
 async function refreshConfigs() {
   try {
     const data = await api.getTwitchBotChannels();
     const channels = data || [];
     
+    // Track which channels should exist
+    const activeNames = new Set();
+
     for (const ch of channels) {
       const name = (ch.twitch_name || '').toLowerCase();
       if (!name) continue;
+      activeNames.add(name);
       channelConfigs.set(name, ch);
 
       // Load custom commands
@@ -91,31 +96,8 @@ async function refreshConfigs() {
 
       // Setup timers
       setupTimers(name, ch.timers || []);
-    }
 
-    console.log(`⚙️ Configs carregadas: ${channels.length} canais`);
-  } catch (err) {
-    console.error('⚠️ Erro ao buscar configs do bot:', err?.message || err);
-  }
-}
-
-// ============================================
-// FETCH STREAMERS FROM SITE + JOIN CHANNELS
-// ============================================
-async function refreshChannels() {
-  try {
-    const streamers = await api.getStreamers();
-    const twitchNames = streamers
-      .map(s => (s.twitch_name || '').toLowerCase().trim())
-      .filter(Boolean);
-
-    if (twitchNames.length === 0) {
-      console.log('⚠️ Nenhum streamer com twitch_name encontrado no site.');
-      return;
-    }
-
-    // Join new channels
-    for (const name of twitchNames) {
+      // Join if not already joined
       if (!joinedChannels.has(name) && !failedChannels.has(name)) {
         try {
           await client.join(name);
@@ -128,24 +110,30 @@ async function refreshChannels() {
       }
     }
 
-    // Part channels that are no longer in the site
-    const siteSet = new Set(twitchNames);
+    // Part channels that were removed from the dashboard
     for (const name of joinedChannels) {
-      if (!siteSet.has(name)) {
+      if (!activeNames.has(name)) {
         try {
           await client.part(name);
           joinedChannels.delete(name);
           modChannels.delete(name);
-          console.log(`📤 Left #${name} (removido do site)`);
+          channelConfigs.delete(name);
+          customCommands.delete(name);
+          // Clear timers
+          const ivs = timerIntervals.get(name) || [];
+          for (const iv of ivs) clearInterval(iv);
+          timerIntervals.delete(name);
+          chatLineCount.delete(name);
+          console.log(`📤 Left #${name} (removido do dashboard)`);
         } catch (e) {
           // Ignore part errors
         }
       }
     }
 
-    console.log(`📺 Canais ativos: ${joinedChannels.size} | Mod em: ${modChannels.size}`);
+    console.log(`⚙️ Configs: ${channels.length} canais | Joined: ${joinedChannels.size} | Mod: ${modChannels.size}`);
   } catch (err) {
-    console.error('❌ Erro ao buscar streamers:', err?.message || err);
+    console.error('⚠️ Erro ao buscar configs do bot:', err?.message || err);
   }
 }
 
@@ -331,13 +319,11 @@ client.on('connected', async (addr, port) => {
   console.log(`✅ OVERFRAG Twitch Bot conectado a ${addr}:${port}`);
   console.log(`🔗 API: ${config.api.baseUrl}`);
 
-  // Load configs + join channels
+  // Load configs + join channels (single call does both now)
   await refreshConfigs();
-  await refreshChannels();
 
-  // Refresh periodically
-  setInterval(refreshChannels, config.refreshInterval);
-  setInterval(refreshConfigs, 2 * 60 * 1000); // Configs every 2 min
+  // Refresh periodically (configs + join/part every 2 min)
+  setInterval(refreshConfigs, 2 * 60 * 1000);
 });
 
 client.on('disconnected', (reason) => {
