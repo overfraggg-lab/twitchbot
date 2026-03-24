@@ -44,6 +44,7 @@ const client = new tmi.Client({
 
 // Track currently joined channels
 const joinedChannels = new Set();
+const failedChannels = new Set();
 
 // ============================================
 // FETCH STREAMERS FROM SITE + JOIN CHANNELS
@@ -62,12 +63,13 @@ async function refreshChannels() {
 
     // Join new channels
     for (const name of twitchNames) {
-      if (!joinedChannels.has(name)) {
+      if (!joinedChannels.has(name) && !failedChannels.has(name)) {
         try {
           await client.join(name);
           joinedChannels.add(name);
           console.log(`📺 Joined #${name}`);
         } catch (e) {
+          failedChannels.add(name);
           console.error(`❌ Falha ao entrar em #${name}:`, e?.message || e);
         }
       }
