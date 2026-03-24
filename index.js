@@ -68,7 +68,7 @@ async function refreshChannels() {
           joinedChannels.add(name);
           console.log(`📺 Joined #${name}`);
         } catch (e) {
-          console.error(`❌ Falha ao entrar em #${name}:`, e.message);
+          console.error(`❌ Falha ao entrar em #${name}:`, e?.message || e);
         }
       }
     }
