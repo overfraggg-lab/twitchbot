@@ -20,7 +20,7 @@ export const config = {
   api: {
     baseUrl: (process.env.SITE_API_URL || 'https://overfrag.pt').replace(/\/+$/, ''),
   },
-  prefix: '!',
+  prefix: '?',
   cooldown: 5000, // 5s cooldown per command per channel
   refreshInterval: 5 * 60 * 1000, // Refresh streamer list every 5 minutes
 };

@@ -81,3 +81,20 @@ export async function incrementCommandUse(commandId) {
     signal: AbortSignal.timeout(TIMEOUT),
   });
 }
+
+/** Get current stream info for a channel (uses site backend proxy to Twitch Helix) */
+export async function getStreamInfo(channelName) {
+  const data = await apiFetch(`/backend/twitchbot/stream-info/${encodeURIComponent(channelName)}`);
+  return data;
+}
+
+/** Set channel title/game (uses site backend proxy to Twitch Helix) */
+export async function setChannelInfo(channelName, updates) {
+  const res = await fetch(`${BASE}/backend/twitchbot/channel-info/${encodeURIComponent(channelName)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+    signal: AbortSignal.timeout(TIMEOUT),
+  });
+  return res.json();
+}

@@ -149,5 +149,86 @@ export async function vrs(channel, args, ctx = {}) {
 
 /** !info — Bot info */
 export async function info() {
-  return 'ℹ️ OVERFRAG Bot — CS2 português ao vivo! Comandos: !score !mapas !match !next !vrs | overfrag.pt';
+  return 'ℹ️ OVERFRAG Bot — CS2 português ao vivo! Comandos: ?score ?mapas ?match ?next ?vrs ?uptime ?title ?game | overfrag.pt';
+}
+
+/** !uptime — Stream uptime */
+export async function uptime(channel, args, ctx = {}) {
+  const channelName = channel.replace(/^#/, '').toLowerCase();
+  try {
+    const data = await api.getStreamInfo(channelName);
+    if (!data || !data.started_at) return `❌ ${channelName} não está em directo.`;
+    const start = new Date(data.started_at);
+    const diff = Date.now() - start.getTime();
+    const hours = Math.floor(diff / 3600000);
+    const mins = Math.floor((diff % 3600000) / 60000);
+    return `⏱️ ${channelName} está em directo há ${hours}h ${mins}m`;
+  } catch {
+    return `❌ Não foi possível obter o uptime.`;
+  }
+}
+
+/** !title [novo título] — Show or change stream title */
+export async function title(channel, args, ctx = {}) {
+  const channelName = channel.replace(/^#/, '').toLowerCase();
+  const newTitle = args.join(' ').trim();
+
+  if (!newTitle) {
+    // Just show current title
+    try {
+      const data = await api.getStreamInfo(channelName);
+      return `📺 Título: ${data?.title || '(sem título)'}`;
+    } catch {
+      return `❌ Não foi possível obter o título.`;
+    }
+  }
+
+  // Change title — requires broadcaster/mod
+  try {
+    const result = await api.setChannelInfo(channelName, { title: newTitle });
+    if (result?.success) return `✅ Título alterado para: ${newTitle}`;
+    return `❌ ${result?.error || 'Não foi possível alterar o título.'}`;
+  } catch {
+    return `❌ Não foi possível alterar o título.`;
+  }
+}
+
+/** !game [novo jogo] — Show or change stream game/category */
+export async function game(channel, args, ctx = {}) {
+  const channelName = channel.replace(/^#/, '').toLowerCase();
+  const newGame = args.join(' ').trim();
+
+  if (!newGame) {
+    try {
+      const data = await api.getStreamInfo(channelName);
+      return `🎮 Jogo: ${data?.game_name || '(sem jogo)'}`;
+    } catch {
+      return `❌ Não foi possível obter o jogo.`;
+    }
+  }
+
+  try {
+    const result = await api.setChannelInfo(channelName, { game: newGame });
+    if (result?.success) return `✅ Jogo alterado para: ${newGame}`;
+    return `❌ ${result?.error || 'Não foi possível alterar o jogo.'}`;
+  } catch {
+    return `❌ Não foi possível alterar o jogo.`;
+  }
+}
+
+/** !viewers — Current viewer count */
+export async function viewers(channel, args, ctx = {}) {
+  const channelName = channel.replace(/^#/, '').toLowerCase();
+  try {
+    const data = await api.getStreamInfo(channelName);
+    if (!data || !data.viewer_count) return `❌ ${channelName} não está em directo.`;
+    return `👀 ${data.viewer_count} viewers a assistir ${channelName}`;
+  } catch {
+    return `❌ Não foi possível obter os viewers.`;
+  }
+}
+
+/** !socials — Social links */
+export async function socials() {
+  return '🔗 Twitter: x.com/overfrag_pt | Discord: discord.gg/overfrag | Site: overfrag.pt';
 }

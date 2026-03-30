@@ -62,6 +62,11 @@ const BUILTIN_COMMANDS = {
   next: commands.next,
   vrs: commands.vrs,
   info: commands.info,
+  uptime: commands.uptime,
+  title: commands.title,
+  game: commands.game,
+  viewers: commands.viewers,
+  socials: commands.socials,
 };
 
 // Cooldown tracking: `${channel}:${command}` -> timestamp
