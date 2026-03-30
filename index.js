@@ -77,30 +77,67 @@ const cooldowns = new Map();
 // Only joins channels that were added via the dashboard.
 // ============================================
 async function refreshConfigs() {
-  // ══════════════════════════════════════════════════════════════
-  // 🚫 DESATIVADO — O bot estava a entrar em TODOS os canais da DB
-  // automaticamente. O join só pode acontecer quando o streamer
-  // adiciona o bot explicitamente via dashboard (opt-in).
-  // Enquanto o sistema de opt-in não estiver implementado, o bot
-  // não entra em nenhum canal via base de dados.
-  // Data: 30 Março 2026
-  // ══════════════════════════════════════════════════════════════
-  console.log('⛔ refreshConfigs DESATIVADO — bot não entra em canais da DB até sistema opt-in estar pronto.');
+  try {
+    // API now only returns channels where streamer has twitchbot_active = 1 (opt-in)
+    const data = await api.getTwitchBotChannels();
+    const channels = data || [];
+    
+    // Track which channels should exist
+    const activeNames = new Set();
 
-  // Part de todos os canais que já estejam joined (limpeza de segurança)
-  for (const name of [...joinedChannels]) {
-    try {
-      await client.part(name);
-      console.log(`📤 Left #${name} (bot desativado)`);
-    } catch (e) { /* ignore */ }
+    for (const ch of channels) {
+      const name = (ch.twitch_name || '').toLowerCase();
+      if (!name) continue;
+      activeNames.add(name);
+      channelConfigs.set(name, ch);
+
+      // Load custom commands
+      if (ch.custom_commands) {
+        const cmdMap = new Map();
+        for (const c of ch.custom_commands) {
+          if (c.enabled) cmdMap.set(c.command.toLowerCase(), c);
+        }
+        customCommands.set(name, cmdMap);
+      }
+
+      // Setup timers
+      setupTimers(name, ch.timers || []);
+
+      // Join if not already joined
+      if (!joinedChannels.has(name) && !failedChannels.has(name)) {
+        try {
+          await client.join(name);
+          joinedChannels.add(name);
+          console.log(`📺 Joined #${name}`);
+        } catch (e) {
+          failedChannels.add(name);
+          console.error(`❌ Falha ao entrar em #${name}:`, e?.message || e);
+        }
+      }
+    }
+
+    // Part channels that were removed or deactivated
+    for (const name of [...joinedChannels]) {
+      if (!activeNames.has(name)) {
+        try {
+          await client.part(name);
+          joinedChannels.delete(name);
+          modChannels.delete(name);
+          channelConfigs.delete(name);
+          customCommands.delete(name);
+          const ivs = timerIntervals.get(name) || [];
+          for (const iv of ivs) clearInterval(iv);
+          timerIntervals.delete(name);
+          chatLineCount.delete(name);
+          console.log(`📤 Left #${name} (streamer desativou bot)`);
+        } catch (e) { /* ignore */ }
+      }
+    }
+
+    console.log(`⚙️ Configs: ${channels.length} canais opt-in | Joined: ${joinedChannels.size} | Mod: ${modChannels.size}`);
+  } catch (err) {
+    console.error('⚠️ Erro ao buscar configs do bot:', err?.message || err);
   }
-  joinedChannels.clear();
-  modChannels.clear();
-  channelConfigs.clear();
-  customCommands.clear();
-  for (const ivs of timerIntervals.values()) ivs.forEach(iv => clearInterval(iv));
-  timerIntervals.clear();
-  chatLineCount.clear();
 }
 
 // ============================================
